@@ -1,0 +1,18 @@
+# Dependencies and build output
+node_modules/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Environment and local tooling
+.env
+.env.local
+.env.*.local
+.DS_Store
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.venv/
+
+# Supabase local state
+supabase/.temp/

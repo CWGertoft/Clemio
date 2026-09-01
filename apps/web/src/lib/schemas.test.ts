@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { calculationSchema } from "./schemas";
+
+test("rejects a calculation row with a negative quantity", () => {
+  const result = calculationSchema.safeParse({
+    id: "ab16ae5a-364e-4c0b-b2f1-1382095dbf1a", title: "Test", description: null,
+    sourceInput: null, customerId: null, vatRate: 25, status: "draft", aiGenerated: false,
+    items: [{ id: "582a3265-670a-4a6c-ae52-b011a4ecb842", type: "labor", category: null,
+      name: "Arbete", description: null, quantity: -1, unit: "tim", costPrice: 0,
+      markupPercent: 0, unitPrice: 65000, totalCost: 0, totalPrice: 0, sortOrder: 0, aiGenerated: false }],
+  });
+  assert.equal(result.success, false);
+});
