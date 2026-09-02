@@ -241,6 +241,9 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- This function is invoked only by the Auth trigger, never by the Data API.
+revoke all on function public.handle_new_user() from public, anon, authenticated;
+
 -- Private functions prevent recursive RLS checks. They only answer questions
 -- about the caller's own auth.uid(), and are not exposed in the public schema.
 create schema if not exists app_private;
@@ -301,9 +304,9 @@ set search_path = public, auth, pg_catalog
 as $$
   select exists (
     select 1
-    from public.quotes quote
-    join public.company_members member on member.company_id = quote.company_id
-    where quote.id = target_quote_id
+    from public.quotes quotation
+    join public.company_members member on member.company_id = quotation.company_id
+    where quotation.id = target_quote_id
       and member.user_id = (select auth.uid())
   );
 $$;
