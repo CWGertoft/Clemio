@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,7 +17,7 @@ class GeneratedItem(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     type: ItemType
     name: str = Field(min_length=1, max_length=180)
-    description: str | None = Field(default=None, max_length=500)
+    description: Optional[str] = Field(default=None, max_length=500)
     quantity: float = Field(gt=0, le=100000)
     unit: str = Field(min_length=1, max_length=24)
 
@@ -45,7 +45,7 @@ class CalculationItem(BaseModel):
 class ReviewCalculationRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     title: str = Field(min_length=2, max_length=160)
-    description: str | None = Field(default=None, max_length=2000)
+    description: Optional[str] = Field(default=None, max_length=2000)
     items: list[CalculationItem] = Field(max_length=250)
 
 
@@ -54,8 +54,8 @@ class ReviewItem(BaseModel):
     severity: Severity
     title: str = Field(min_length=1, max_length=160)
     description: str = Field(min_length=1, max_length=1000)
-    suggested_action: str | None = Field(default=None, max_length=500)
-    proposed_item: GeneratedItem | None = None
+    suggested_action: Optional[str] = Field(default=None, max_length=500)
+    proposed_item: Optional[GeneratedItem] = None
 
 
 class ReviewResult(BaseModel):
