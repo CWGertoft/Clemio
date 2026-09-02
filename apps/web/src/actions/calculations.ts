@@ -12,7 +12,6 @@ import {
   sumMoney,
 } from "@/lib/money";
 import { aiPromptSchema, calculationSchema } from "@/lib/schemas";
-import { duplicateCalculationItems } from "@/lib/calculation-utils";
 import type { CalculationItem } from "@/types/domain";
 import type { ActionResult } from "./auth";
 
@@ -90,34 +89,58 @@ export async function saveCalculationAction(input: unknown): Promise<ActionResul
   return {};
 }
 
-export async function duplicateCalculationAction(id: string): Promise<ActionResult<{ id: string }>> {
-  if (!z.string().uuid().safeParse(id).success) return { error: "Ogiltigt kalkyl-id." };
-  const source = await getCalculation(id);
-  const { supabase, companyId } = await getCompanyId();
-  if (!source || !companyId) return { error: "Kalkylen kunde inte hittas." };
-  const copyTotals = totals(source.items, source.vatRate);
-  const { data: duplicate, error } = await supabase.from("calculations").insert({
-    company_id: companyId, customer_id: source.customerId, title: `${source.title} (kopia)`,
-    description: source.description, source_input: source.sourceInput, status: "draft", vat_rate: source.vatRate,
-    subtotal_ex_vat: minorToSek(copyTotals.subtotal), vat_amount: minorToSek(copyTotals.vat),
-    total_inc_vat: minorToSek(copyTotals.total), ai_generated: source.aiGenerated,
-  }).select("id").single();
-  if (error || !duplicate) return { error: error?.message ?? "Kalkylen kunde inte dupliceras." };
-  if (copyTotals.items.length) {
-    const items = duplicateCalculationItems(copyTotals.items, randomUUID).map((item) => toDbItem(item, String(duplicate.id)));
-    const { error: itemsError } = await supabase.from("calculation_items").insert(items);
-    if (itemsError) return { error: itemsError.message };
-  }
-  revalidatePath("/app/calculations");
-  return { data: { id: String(duplicate.id) } };
-}
-
 export async function archiveCalculationAction(id: string): Promise<ActionResult> {
   if (!z.string().uuid().safeParse(id).success) return { error: "Ogiltigt kalkyl-id." };
-  const { supabase } = await getCompanyId();
-  const { error } = await supabase.from("calculations").update({ status: "archived" }).eq("id", id);
+  const { supabase, companyId } = await getCompanyId();
+  if (!companyId) return { error: "Företaget kunde inte hittas." };
+  const { error } = await supabase.from("calculations")
+    .update({ status: "archived" })
+    .eq("id", id)
+    .eq("company_id", companyId);
   if (error) return { error: error.message };
   revalidatePath("/app/calculations");
+  revalidatePath("/app");
+  return {};
+}
+
+export async function restoreCalculationAction(id: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(id).success) return { error: "Ogiltigt kalkyl-id." };
+  const { supabase, companyId } = await getCompanyId();
+  if (!companyId) return { error: "Företaget kunde inte hittas." };
+  const { error } = await supabase.from("calculations")
+    .update({ status: "draft" })
+    .eq("id", id)
+    .eq("company_id", companyId);
+  if (error) return { error: error.message };
+  revalidatePath("/app/calculations");
+  revalidatePath("/app");
+  return {};
+}
+
+export async function deleteCalculationAction(id: string): Promise<ActionResult> {
+  if (!z.string().uuid().safeParse(id).success) return { error: "Ogiltigt kalkyl-id." };
+  const { supabase, companyId } = await getCompanyId();
+  if (!companyId) return { error: "Företaget kunde inte hittas." };
+
+  const { data: quote, error: quoteError } = await supabase.from("quotes")
+    .select("id")
+    .eq("calculation_id", id)
+    .eq("company_id", companyId)
+    .limit(1)
+    .maybeSingle();
+  if (quoteError) return { error: quoteError.message };
+  if (quote) return { error: "Kalkylen har en offert och kan därför inte tas bort. Arkivera den i stället." };
+
+  const { data, error } = await supabase.from("calculations")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", companyId)
+    .select("id")
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!data) return { error: "Kalkylen kunde inte hittas eller tas bort." };
+  revalidatePath("/app/calculations");
+  revalidatePath("/app");
   return {};
 }
 
