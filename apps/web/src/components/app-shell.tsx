@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { useTheme } from "next-themes";
-import { Calculator, Home, LogOut, Moon, Plus, Settings, Sun, Users } from "lucide-react";
+import { Calculator, FolderKanban, Home, LogOut, Moon, Plus, Settings, Sun, Users } from "lucide-react";
 import { signOutAction } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navigation = [
   { href: "/app", label: "Översikt", icon: Home, exact: true },
+  { href: "/app/projects", label: "Projekt", icon: FolderKanban },
   { href: "/app/calculations", label: "Kalkyler", icon: Calculator },
   { href: "/app/customers", label: "Kunder", icon: Users },
 ];
@@ -37,9 +38,9 @@ export function AppShell({ companyName, children }: { companyName: string; child
           <span className="grid size-8 place-items-center rounded-lg bg-brand text-white">C</span>
           Cemio
         </Link>
-        <Link href="/app/calculations/new" className="mb-5">
+        <Link href="/app/projects/new" className="mb-5">
           <Button className="h-10 w-full justify-center bg-brand text-white hover:bg-brand/85" size="lg">
-            <Plus /> Ny kalkyl
+            <Plus /> Nytt projekt
           </Button>
         </Link>
         <nav className="space-y-1">
@@ -69,7 +70,7 @@ export function AppShell({ companyName, children }: { companyName: string; child
         <Link href="/app" className="flex items-center gap-2 font-semibold"><span className="grid size-7 place-items-center rounded-md bg-brand text-xs text-white">C</span> Cemio</Link>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" aria-label="Växla tema" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun /> : <Moon />}</Button>
-          <Link href="/app/calculations/new"><Button size="icon" aria-label="Ny kalkyl"><Plus /></Button></Link>
+          <Link href="/app/projects/new"><Button size="icon" aria-label="Nytt projekt"><Plus /></Button></Link>
         </div>
       </header>
       <main className="mx-auto max-w-[1600px] px-4 py-6 pb-24 lg:ml-64 lg:px-10 lg:py-10">{children}</main>

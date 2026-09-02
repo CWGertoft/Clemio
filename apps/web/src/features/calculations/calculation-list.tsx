@@ -36,7 +36,7 @@ export function CalculationList({ calculations }: { calculations: Calculation[] 
     const matchesFilter = filter === "archived"
       ? calculation.status === "archived"
       : calculation.status !== "archived";
-    const matchesQuery = `${calculation.title} ${calculation.customerName ?? ""}`
+    const matchesQuery = `${calculation.title} ${calculation.projectTitle ?? ""} ${calculation.customerName ?? ""}`
       .toLocaleLowerCase("sv-SE")
       .includes(query.toLocaleLowerCase("sv-SE"));
     return matchesFilter && matchesQuery;
@@ -100,7 +100,7 @@ export function CalculationList({ calculations }: { calculations: Calculation[] 
           <p className="text-sm text-muted-foreground">Kalkyler</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">Alla kalkyler</h1>
         </div>
-        <Button onClick={() => router.push("/app/calculations/new")}><Plus />Ny kalkyl</Button>
+        <Button onClick={() => router.push("/app/projects/new")}><Plus />Nytt projekt</Button>
       </header>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -130,7 +130,7 @@ export function CalculationList({ calculations }: { calculations: Calculation[] 
                   <Link href={`/app/calculations/${calculation.id}`} className="min-w-0 flex-1">
                     <p className="truncate font-medium">{calculation.title}</p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {calculation.customerName ?? "Ingen kund"} · Uppdaterad {new Intl.DateTimeFormat("sv-SE", { dateStyle: "medium" }).format(new Date(calculation.updatedAt))}
+                      {calculation.projectTitle ?? calculation.customerName ?? "Ej kopplad till projekt"} · Uppdaterad {new Intl.DateTimeFormat("sv-SE", { dateStyle: "medium" }).format(new Date(calculation.updatedAt))}
                     </p>
                   </Link>
 
@@ -174,8 +174,8 @@ export function CalculationList({ calculations }: { calculations: Calculation[] 
               <p className="font-medium">{emptyTitle}</p>
               <p className="mt-1 text-sm text-muted-foreground">{emptyDescription}</p>
               {!query && filter === "active" && (
-                <Button className="mt-4" size="sm" onClick={() => router.push("/app/calculations/new")}>
-                  <Plus />Skapa första kalkylen
+                <Button className="mt-4" size="sm" onClick={() => router.push("/app/projects/new")}>
+                  <Plus />Skapa första projektet
                 </Button>
               )}
             </div>

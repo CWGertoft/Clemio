@@ -28,6 +28,8 @@ export type Calculation = {
   title: string;
   description: string | null;
   sourceInput: string | null;
+  projectId: string | null;
+  projectTitle: string | null;
   customerId: string | null;
   customerName: string | null;
   status: CalculationStatus;
@@ -51,6 +53,16 @@ export type Customer = {
   postalCode: string | null;
   city: string | null;
   createdAt: string;
+};
+
+export type Project = {
+  id: string;
+  title: string;
+  description: string | null;
+  customer: Customer | null;
+  calculationCount: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type CompanySettings = {

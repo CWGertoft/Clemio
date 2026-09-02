@@ -45,19 +45,34 @@ async function assertCustomerBelongsToCompany(customerId: string | null, company
   return Boolean(data);
 }
 
-export async function createManualCalculationAction(input: { title?: string; customerId?: string | null }): Promise<ActionResult<{ id: string }>> {
+async function getProjectContext(projectId: string, companyId: string, supabase: Awaited<ReturnType<typeof getCompanyId>>["supabase"]) {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, customer_id")
+    .eq("id", projectId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data?.customer_id) return null;
+  return { id: String(data.id), customerId: String(data.customer_id) };
+}
+
+export async function createManualCalculationAction(input: { title?: string; projectId?: string }): Promise<ActionResult<{ id: string }>> {
   const title = z.string().trim().min(2).max(160).safeParse(input.title ?? "Ny kalkyl");
-  const customerId = input.customerId && z.string().uuid().safeParse(input.customerId).success ? input.customerId : null;
+  const projectId = z.string().uuid().safeParse(input.projectId);
   if (!title.success) return { error: "Ange en tydlig rubrik för kalkylen." };
+  if (!projectId.success) return { error: "Välj ett projekt innan du skapar en kalkyl." };
   const [company, context] = await Promise.all([getCurrentCompany(), getCompanyId()]);
   if (!company || !context.companyId) return { error: "Skapa ett företag först." };
-  if (!(await assertCustomerBelongsToCompany(customerId, context.companyId, context.supabase))) return { error: "Kunden tillhör inte ditt företag." };
+  const project = await getProjectContext(projectId.data, context.companyId, context.supabase);
+  if (!project) return { error: "Projektet kunde inte hittas." };
   const { data, error } = await context.supabase.from("calculations").insert({
-    company_id: context.companyId, customer_id: customerId, title: title.data,
+    company_id: context.companyId, project_id: project.id, customer_id: project.customerId, title: title.data,
     status: "draft", vat_rate: company.defaultVatRate, ai_generated: false,
   }).select("id").single();
   if (error || !data) return { error: error?.message ?? "Det gick inte att skapa kalkylen." };
   revalidatePath("/app/calculations");
+  revalidatePath(`/app/projects/${project.id}`);
   return { data: { id: String(data.id) } };
 }
 
@@ -67,11 +82,28 @@ export async function saveCalculationAction(input: unknown): Promise<ActionResul
   const calculation = parsed.data;
   const { supabase, companyId } = await getCompanyId();
   if (!companyId) return { error: "Skapa ett företag först." };
-  if (!(await assertCustomerBelongsToCompany(calculation.customerId, companyId, supabase))) return { error: "Kunden tillhör inte ditt företag." };
+  const { data: existing, error: existingError } = await supabase
+    .from("calculations")
+    .select("project_id")
+    .eq("id", calculation.id)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (existingError) return { error: existingError.message };
+  if (!existing) return { error: "Kalkylen kunde inte hittas." };
+
+  const existingProjectId = existing.project_id ? String(existing.project_id) : null;
+  let customerId = calculation.customerId;
+  if (existingProjectId) {
+    const project = await getProjectContext(existingProjectId, companyId, supabase);
+    if (!project) return { error: "Projektet kunde inte hittas." };
+    customerId = project.customerId;
+  } else if (!(await assertCustomerBelongsToCompany(customerId, companyId, supabase))) {
+    return { error: "Kunden tillhör inte ditt företag." };
+  }
   const result = totals(calculation.items, calculation.vatRate);
   const { error: updateError } = await supabase.from("calculations").update({
     title: calculation.title, description: calculation.description, source_input: calculation.sourceInput,
-    customer_id: calculation.customerId, status: calculation.status, vat_rate: calculation.vatRate,
+    customer_id: customerId, status: calculation.status, vat_rate: calculation.vatRate,
     subtotal_ex_vat: minorToSek(result.subtotal), vat_amount: minorToSek(result.vat),
     total_inc_vat: minorToSek(result.total), ai_generated: calculation.aiGenerated,
   }).eq("id", calculation.id).eq("company_id", companyId);
@@ -86,6 +118,7 @@ export async function saveCalculationAction(input: unknown): Promise<ActionResul
   revalidatePath(`/app/calculations/${calculation.id}`);
   revalidatePath("/app/calculations");
   revalidatePath("/app");
+  if (existingProjectId) revalidatePath(`/app/projects/${existingProjectId}`);
   return {};
 }
 
@@ -168,12 +201,12 @@ function mapAiItem(
 }
 
 export async function createAiCalculationAction(input: unknown): Promise<ActionResult<{ id: string }>> {
-  const parsed = aiPromptSchema.extend({ customerId: z.string().uuid().nullable().optional() }).safeParse(input);
+  const parsed = aiPromptSchema.extend({ projectId: z.string().uuid() }).safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Beskriv arbetet först." };
   const [company, context, library] = await Promise.all([getCurrentCompany(), getCompanyId(), getLibrary()]);
   if (!company || !context.companyId) return { error: "Skapa ett företag först." };
-  const customerId = parsed.data.customerId ?? null;
-  if (!(await assertCustomerBelongsToCompany(customerId, context.companyId, context.supabase))) return { error: "Kunden tillhör inte ditt företag." };
+  const project = await getProjectContext(parsed.data.projectId, context.companyId, context.supabase);
+  if (!project) return { error: "Projektet kunde inte hittas." };
   let generated: Awaited<ReturnType<typeof generateWithAi>>;
   try {
     generated = await generateWithAi({
@@ -189,7 +222,7 @@ export async function createAiCalculationAction(input: unknown): Promise<ActionR
   }));
   const calculated = totals(items, company.defaultVatRate);
   const { data, error } = await context.supabase.from("calculations").insert({
-    company_id: context.companyId, customer_id: customerId, title: generated.title, source_input: parsed.data.description, status: "draft",
+    company_id: context.companyId, project_id: project.id, customer_id: project.customerId, title: generated.title, source_input: parsed.data.description, status: "draft",
     vat_rate: company.defaultVatRate, subtotal_ex_vat: minorToSek(calculated.subtotal), vat_amount: minorToSek(calculated.vat),
     total_inc_vat: minorToSek(calculated.total), ai_generated: true,
   }).select("id").single();
@@ -197,6 +230,7 @@ export async function createAiCalculationAction(input: unknown): Promise<ActionR
   const { error: itemError } = await context.supabase.from("calculation_items").insert(calculated.items.map((item) => toDbItem(item, String(data.id))));
   if (itemError) return { error: itemError.message };
   revalidatePath("/app/calculations");
+  revalidatePath(`/app/projects/${project.id}`);
   return { data: { id: String(data.id) } };
 }
 

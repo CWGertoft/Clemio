@@ -31,6 +31,20 @@ export const customerSchema = z.object({
   city: z.string().trim().max(80).nullish(),
 });
 
+export const projectCreateSchema = z.object({
+  title: z.string().trim().min(2, "Ange ett projektnamn").max(160),
+  description: z.string().trim().max(2000).nullable(),
+  customerId: z.string().uuid().nullable(),
+  newCustomer: customerSchema.nullable(),
+}).superRefine((value, context) => {
+  if (!value.customerId && !value.newCustomer) {
+    context.addIssue({ code: "custom", path: ["customerId"], message: "Välj eller skapa en kund för projektet." });
+  }
+  if (value.customerId && value.newCustomer) {
+    context.addIssue({ code: "custom", path: ["customerId"], message: "Välj antingen en befintlig kund eller skapa en ny." });
+  }
+});
+
 export const calculationItemSchema = z.object({
   id: z.string().uuid(),
   type: z.enum(["labor", "material", "other"]),
@@ -53,6 +67,7 @@ export const calculationSchema = z.object({
   title: z.string().trim().min(2, "Ange en rubrik").max(160),
   description: z.string().trim().max(2000).nullable(),
   sourceInput: z.string().trim().max(5000).nullable(),
+  projectId: z.string().uuid().nullable(),
   customerId: z.string().uuid().nullable(),
   vatRate: z.number().min(0).max(100),
   status: z.enum(["draft", "reviewed", "quote_created", "archived"]),

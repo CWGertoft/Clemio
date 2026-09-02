@@ -21,6 +21,7 @@ export async function createCustomerAction(input: unknown): Promise<ActionResult
   if (error || !data) return { error: error?.message ?? "Det gick inte att skapa kunden." };
   revalidatePath("/app/customers");
   revalidatePath("/app/calculations/new");
+  revalidatePath("/app/projects/new");
   return { data: { id: String(data.id) } };
 }
 

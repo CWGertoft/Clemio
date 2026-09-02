@@ -7,6 +7,7 @@ import type {
   CompanySettings,
   Customer,
   LibraryItem,
+  Project,
   Quote,
   ReviewSuggestion,
 } from "@/types/domain";
@@ -121,7 +122,11 @@ export function toItem(value: unknown): CalculationItem {
   };
 }
 
-export function toCalculation(value: unknown, customerName: string | null = null): Calculation {
+export function toCalculation(
+  value: unknown,
+  customerName: string | null = null,
+  projectTitle: string | null = null,
+): Calculation {
   const item = row(value);
   const nestedItems = Array.isArray(item.calculation_items) ? item.calculation_items : [];
   const status = item.status;
@@ -130,6 +135,8 @@ export function toCalculation(value: unknown, customerName: string | null = null
     title: String(item.title),
     description: string(item.description),
     sourceInput: string(item.source_input),
+    projectId: string(item.project_id),
+    projectTitle,
     customerId: string(item.customer_id),
     customerName,
     status: status === "reviewed" || status === "quote_created" || status === "archived" ? status : "draft",
@@ -140,6 +147,21 @@ export function toCalculation(value: unknown, customerName: string | null = null
     aiGenerated: Boolean(item.ai_generated),
     updatedAt: String(item.updated_at),
     items: nestedItems.map(toItem).sort((a, b) => a.sortOrder - b.sortOrder),
+  };
+}
+
+export function toProject(value: unknown): Project {
+  const item = row(value);
+  const customer = item.customers ? toCustomer(item.customers) : null;
+  const calculations = Array.isArray(item.calculations) ? item.calculations : [];
+  return {
+    id: String(item.id),
+    title: String(item.title),
+    description: string(item.description),
+    customer,
+    calculationCount: calculations.length,
+    createdAt: String(item.created_at),
+    updatedAt: String(item.updated_at),
   };
 }
 
@@ -158,21 +180,47 @@ export async function getCustomer(id: string): Promise<Customer | null> {
   return data ? toCustomer(data) : null;
 }
 
-export async function getCalculations(): Promise<Calculation[]> {
+export async function getProjects(): Promise<Project[]> {
   const { supabase, companyId } = await getCompanyId();
   if (!companyId) return [];
   const { data, error } = await supabase
-    .from("calculations")
-    .select("*, calculation_items(*)")
+    .from("projects")
+    .select("*, customers(*), calculations(id)")
     .eq("company_id", companyId)
     .order("updated_at", { ascending: false });
   if (error) throw new Error(error.message);
+  return (data ?? []).map(toProject);
+}
 
-  const customers = await getCustomers();
-  const customerNames = new Map(customers.map((customer) => [customer.id, customer.name]));
+export async function getProject(id: string): Promise<Project | null> {
+  const { supabase, companyId } = await getCompanyId();
+  if (!companyId) return null;
+  const { data, error } = await supabase
+    .from("projects")
+    .select("*, customers(*)")
+    .eq("id", id)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? toProject(data) : null;
+}
+
+export async function getCalculations(projectId?: string): Promise<Calculation[]> {
+  const { supabase, companyId } = await getCompanyId();
+  if (!companyId) return [];
+  let query = supabase
+    .from("calculations")
+    .select("*, calculation_items(*), customers(name), projects(title)")
+    .eq("company_id", companyId)
+    .order("updated_at", { ascending: false });
+  if (projectId) query = query.eq("project_id", projectId);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
   return (data ?? []).map((calculation) => {
     const calculationRow = row(calculation);
-    return toCalculation(calculation, customerNames.get(string(calculationRow.customer_id) ?? "") ?? null);
+    const customer = row(calculationRow.customers);
+    const project = row(calculationRow.projects);
+    return toCalculation(calculation, string(customer.name), string(project.title));
   });
 }
 
@@ -180,15 +228,17 @@ export async function getCalculation(id: string): Promise<Calculation | null> {
   const { supabase } = await getCompanyId();
   const { data, error } = await supabase
     .from("calculations")
-    .select("*, calculation_items(*)")
+    .select("*, calculation_items(*), customers(name), projects(title)")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
   const calculationRow = row(data);
-  const customerId = string(calculationRow.customer_id);
-  const customer = customerId ? await getCustomer(customerId) : null;
-  return toCalculation(data, customer?.name ?? null);
+  return toCalculation(
+    data,
+    string(row(calculationRow.customers).name),
+    string(row(calculationRow.projects).title),
+  );
 }
 
 export async function getLibrary(): Promise<{ labor: LibraryItem[]; materials: LibraryItem[] }> {
