@@ -14,11 +14,13 @@ export async function createCustomerAction(input: unknown): Promise<ActionResult
   const value = parsed.data;
   const { data, error } = await supabase.from("customers").insert({
     company_id: companyId, type: value.type, name: value.name,
-    organization_number: value.organizationNumber || null, email: value.email || null, phone: value.phone || null,
+    organization_number: value.type === "company" ? value.organizationNumber || null : null,
+    email: value.email || null, phone: value.phone || null,
     address: value.address || null, postal_code: value.postalCode || null, city: value.city || null,
   }).select("id").single();
   if (error || !data) return { error: error?.message ?? "Det gick inte att skapa kunden." };
   revalidatePath("/app/customers");
+  revalidatePath("/app/calculations/new");
   return { data: { id: String(data.id) } };
 }
 
@@ -29,7 +31,8 @@ export async function updateCustomerAction(id: string, input: unknown): Promise<
   const { supabase } = await getCompanyId();
   const value = parsed.data;
   const { error } = await supabase.from("customers").update({
-    type: value.type, name: value.name, organization_number: value.organizationNumber || null,
+    type: value.type, name: value.name,
+    organization_number: value.type === "company" ? value.organizationNumber || null : null,
     email: value.email || null, phone: value.phone || null, address: value.address || null,
     postal_code: value.postalCode || null, city: value.city || null,
   }).eq("id", id);

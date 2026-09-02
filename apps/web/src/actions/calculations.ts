@@ -145,10 +145,12 @@ function mapAiItem(
 }
 
 export async function createAiCalculationAction(input: unknown): Promise<ActionResult<{ id: string }>> {
-  const parsed = aiPromptSchema.safeParse(input);
+  const parsed = aiPromptSchema.extend({ customerId: z.string().uuid().nullable().optional() }).safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Beskriv arbetet först." };
   const [company, context, library] = await Promise.all([getCurrentCompany(), getCompanyId(), getLibrary()]);
   if (!company || !context.companyId) return { error: "Skapa ett företag först." };
+  const customerId = parsed.data.customerId ?? null;
+  if (!(await assertCustomerBelongsToCompany(customerId, context.companyId, context.supabase))) return { error: "Kunden tillhör inte ditt företag." };
   let generated: Awaited<ReturnType<typeof generateWithAi>>;
   try {
     generated = await generateWithAi({
@@ -164,7 +166,7 @@ export async function createAiCalculationAction(input: unknown): Promise<ActionR
   }));
   const calculated = totals(items, company.defaultVatRate);
   const { data, error } = await context.supabase.from("calculations").insert({
-    company_id: context.companyId, title: generated.title, source_input: parsed.data.description, status: "draft",
+    company_id: context.companyId, customer_id: customerId, title: generated.title, source_input: parsed.data.description, status: "draft",
     vat_rate: company.defaultVatRate, subtotal_ex_vat: minorToSek(calculated.subtotal), vat_amount: minorToSek(calculated.vat),
     total_inc_vat: minorToSek(calculated.total), ai_generated: true,
   }).select("id").single();

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculationSchema } from "./schemas";
+import { calculationSchema, customerSchema } from "./schemas";
 
 test("rejects a calculation row with a negative quantity", () => {
   const result = calculationSchema.safeParse({
@@ -11,4 +11,18 @@ test("rejects a calculation row with a negative quantity", () => {
       markupPercent: 0, unitPrice: 65000, totalCost: 0, totalPrice: 0, sortOrder: 0, aiGenerated: false }],
   });
   assert.equal(result.success, false);
+});
+
+test("allows blank optional fields for a private customer", () => {
+  const result = customerSchema.safeParse({
+    type: "private",
+    name: "WG",
+    organizationNumber: null,
+    email: "privatperson@example.se",
+    phone: "0700000000",
+    address: "Testvägen 1",
+    postalCode: "11111",
+    city: null,
+  });
+  assert.equal(result.success, true);
 });

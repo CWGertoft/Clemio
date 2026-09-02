@@ -23,12 +23,12 @@ export const companySchema = z.object({
 export const customerSchema = z.object({
   type: z.enum(["private", "company"]),
   name: z.string().trim().min(2, "Ange kundens namn").max(160),
-  organizationNumber: z.string().trim().max(32).optional().or(z.literal("")),
-  email: z.string().trim().email("Ange en giltig e-postadress").optional().or(z.literal("")),
-  phone: z.string().trim().max(40).optional().or(z.literal("")),
-  address: z.string().trim().max(160).optional().or(z.literal("")),
-  postalCode: z.string().trim().max(16).optional().or(z.literal("")),
-  city: z.string().trim().max(80).optional().or(z.literal("")),
+  organizationNumber: z.string().trim().max(32).nullish(),
+  email: z.string().trim().email("Ange en giltig e-postadress").or(z.literal("")).nullish(),
+  phone: z.string().trim().max(40).nullish(),
+  address: z.string().trim().max(160).nullish(),
+  postalCode: z.string().trim().max(16).nullish(),
+  city: z.string().trim().max(80).nullish(),
 });
 
 export const calculationItemSchema = z.object({
